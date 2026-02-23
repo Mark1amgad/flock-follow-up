@@ -72,18 +72,21 @@ export type Database = {
       }
       profiles: {
         Row: {
+          approved: boolean
           created_at: string
           gender: string
           id: string
           name: string
         }
         Insert: {
+          approved?: boolean
           created_at?: string
           gender: string
           id: string
           name: string
         }
         Update: {
+          approved?: boolean
           created_at?: string
           gender?: string
           id?: string
@@ -159,7 +162,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "member"
+      app_role: "admin" | "member" | "pending"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -287,7 +290,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "member"],
+      app_role: ["admin", "member", "pending"],
     },
   },
 } as const
