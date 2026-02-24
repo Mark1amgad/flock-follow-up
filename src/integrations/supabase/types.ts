@@ -114,6 +114,8 @@ export type Database = {
       }
       weekly_assignments: {
         Row: {
+          completed: boolean
+          completed_at: string | null
           created_at: string
           id: string
           person_id: string
@@ -121,6 +123,8 @@ export type Database = {
           week_start_date: string
         }
         Insert: {
+          completed?: boolean
+          completed_at?: string | null
           created_at?: string
           id?: string
           person_id: string
@@ -128,6 +132,8 @@ export type Database = {
           week_start_date: string
         }
         Update: {
+          completed?: boolean
+          completed_at?: string | null
           created_at?: string
           id?: string
           person_id?: string

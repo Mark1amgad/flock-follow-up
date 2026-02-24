@@ -1,9 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import PersonCard from "@/components/PersonCard";
 import { Button } from "@/components/ui/button";
-import { LogOut, Church } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { LogOut, Church, CheckCircle2, Circle, ListChecks } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 
 interface AssignedPerson {
   id: string;
@@ -13,40 +16,74 @@ interface AssignedPerson {
   last_attendance_date: string | null;
 }
 
+interface Assignment {
+  id: string;
+  completed: boolean;
+  completed_at: string | null;
+  person: AssignedPerson;
+}
+
+function getWeekStartStr(): string {
+  const today = new Date();
+  const day = today.getDay();
+  const diff = (day + 1) % 7;
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - diff);
+  return weekStart.toISOString().split("T")[0];
+}
+
 export default function MemberDashboard() {
   const { user, profile, signOut } = useAuth();
-  const [people, setPeople] = useState<AssignedPerson[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchAssignments = async () => {
-      if (!user) return;
-      // Get current week start (Saturday) - must match admin generation
-      const today = new Date();
-      const day = today.getDay();
-      // Saturday: day=6 -> diff=0, Sunday: day=0 -> diff=1, Mon: day=1 -> diff=2, etc.
-      const diff = (day + 1) % 7;
-      const weekStart = new Date(today);
-      weekStart.setDate(today.getDate() - diff);
-      const weekStartStr = weekStart.toISOString().split("T")[0];
-      console.log("[MemberDashboard] auth.uid:", user.id, "weekStartStr:", weekStartStr);
+  const fetchAssignments = useCallback(async () => {
+    if (!user) return;
+    const weekStartStr = getWeekStartStr();
+    console.log("[MemberDashboard] auth.uid:", user.id, "weekStartStr:", weekStartStr);
 
-      const { data } = await supabase
-        .from("weekly_assignments")
-        .select("person_id, people(id, name, phone, gender, last_attendance_date)")
-        .eq("servant_id", user.id)
-        .eq("week_start_date", weekStartStr);
+    const { data } = await supabase
+      .from("weekly_assignments")
+      .select("id, completed, completed_at, person_id, people(id, name, phone, gender, last_attendance_date)")
+      .eq("servant_id", user.id)
+      .eq("week_start_date", weekStartStr);
 
-      if (data) {
-        const assigned = data
-          .map((d: any) => d.people)
-          .filter(Boolean) as AssignedPerson[];
-        setPeople(assigned);
-      }
-      setLoading(false);
-    };
-    fetchAssignments();
+    if (data) {
+      const mapped: Assignment[] = data
+        .filter((d: any) => d.people)
+        .map((d: any) => ({
+          id: d.id,
+          completed: d.completed,
+          completed_at: d.completed_at,
+          person: d.people as AssignedPerson,
+        }));
+      setAssignments(mapped);
+    }
+    setLoading(false);
   }, [user]);
+
+  useEffect(() => {
+    fetchAssignments();
+  }, [fetchAssignments]);
+
+  const markCompleted = async (assignmentId: string) => {
+    const { error } = await supabase
+      .from("weekly_assignments")
+      .update({ completed: true, completed_at: new Date().toISOString() })
+      .eq("id", assignmentId);
+
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Marked as completed ✓" });
+    fetchAssignments();
+  };
+
+  const total = assignments.length;
+  const completedCount = assignments.filter((a) => a.completed).length;
+  const remaining = total - completedCount;
+  const progressPct = total > 0 ? Math.round((completedCount / total) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -65,24 +102,65 @@ export default function MemberDashboard() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto p-4">
-        <h2 className="text-xl font-semibold mb-4 text-foreground">Your Assignments This Week</h2>
+      <main className="max-w-4xl mx-auto p-4 space-y-6">
+        {/* Progress Section */}
+        {!loading && total > 0 && (
+          <div className="rounded-lg border bg-card p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <ListChecks className="h-5 w-5 text-primary" />
+              <h2 className="font-semibold text-foreground">Weekly Progress</h2>
+            </div>
+            <Progress value={progressPct} className="h-3" />
+            <div className="flex gap-4 text-sm">
+              <div className="flex items-center gap-1.5">
+                <Circle className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground">Total: <strong className="text-foreground">{total}</strong></span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                <span className="text-muted-foreground">Done: <strong className="text-green-600">{completedCount}</strong></span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Circle className="h-3.5 w-3.5 text-orange-500" />
+                <span className="text-muted-foreground">Remaining: <strong className="text-orange-500">{remaining}</strong></span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <h2 className="text-xl font-semibold text-foreground">Your Assignments This Week</h2>
         {loading ? (
           <div className="flex justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
           </div>
-        ) : people.length === 0 ? (
+        ) : assignments.length === 0 ? (
           <p className="text-center text-muted-foreground py-12">No assignments for this week.</p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
-            {people.map((p) => (
-              <PersonCard
-                key={p.id}
-                name={p.name}
-                phone={p.phone}
-                gender={p.gender}
-                lastAttendanceDate={p.last_attendance_date}
-              />
+            {assignments.map((a) => (
+              <div key={a.id} className={`relative ${a.completed ? "opacity-75" : ""}`}>
+                {a.completed && (
+                  <Badge className="absolute top-2 right-2 z-10 bg-green-600 text-white border-0">
+                    <CheckCircle2 className="h-3 w-3 mr-1" /> Done
+                  </Badge>
+                )}
+                <PersonCard
+                  name={a.person.name}
+                  phone={a.person.phone}
+                  gender={a.person.gender}
+                  lastAttendanceDate={a.person.last_attendance_date}
+                />
+                {!a.completed && (
+                  <Button
+                    variant="outline"
+                    className="w-full mt-2 border-green-600 text-green-600 hover:bg-green-600 hover:text-white"
+                    onClick={() => markCompleted(a.id)}
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Mark as Completed
+                  </Button>
+                )}
+              </div>
             ))}
           </div>
         )}
