@@ -76,7 +76,29 @@ export default function MemberDashboard() {
       toast({ title: "Error", description: error.message, variant: "destructive" });
       return;
     }
-    toast({ title: "Marked as completed ✓" });
+    toast({
+      title: "Marked as completed ✓",
+      description: "You can undo this within 60 seconds.",
+      action: (
+        <Button variant="outline" size="sm" onClick={() => undoCompleted(assignmentId)}>
+          Undo
+        </Button>
+      ),
+    });
+    fetchAssignments();
+  };
+
+  const undoCompleted = async (assignmentId: string) => {
+    const { error } = await supabase
+      .from("weekly_assignments")
+      .update({ completed: false, completed_at: null })
+      .eq("id", assignmentId);
+
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Completion undone" });
     fetchAssignments();
   };
 
@@ -150,7 +172,7 @@ export default function MemberDashboard() {
                   gender={a.person.gender}
                   lastAttendanceDate={a.person.last_attendance_date}
                 />
-                {!a.completed && (
+                {!a.completed ? (
                   <Button
                     variant="outline"
                     className="w-full mt-2 border-green-600 text-green-600 hover:bg-green-600 hover:text-white"
@@ -159,7 +181,15 @@ export default function MemberDashboard() {
                     <CheckCircle2 className="h-4 w-4 mr-2" />
                     Mark as Completed
                   </Button>
-                )}
+                ) : a.completed_at && (Date.now() - new Date(a.completed_at).getTime()) < 60_000 ? (
+                  <Button
+                    variant="outline"
+                    className="w-full mt-2 border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white"
+                    onClick={() => undoCompleted(a.id)}
+                  >
+                    Undo
+                  </Button>
+                ) : null}
               </div>
             ))}
           </div>
