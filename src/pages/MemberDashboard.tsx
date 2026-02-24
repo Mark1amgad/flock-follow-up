@@ -21,12 +21,15 @@ export default function MemberDashboard() {
   useEffect(() => {
     const fetchAssignments = async () => {
       if (!user) return;
-      // Get current week start (Monday)
-      const now = new Date();
-      const day = now.getDay();
-      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-      const weekStart = new Date(now.setDate(diff));
+      // Get current week start (Saturday) - must match admin generation
+      const today = new Date();
+      const day = today.getDay();
+      // Saturday: day=6 -> diff=0, Sunday: day=0 -> diff=1, Mon: day=1 -> diff=2, etc.
+      const diff = (day + 1) % 7;
+      const weekStart = new Date(today);
+      weekStart.setDate(today.getDate() - diff);
       const weekStartStr = weekStart.toISOString().split("T")[0];
+      console.log("[MemberDashboard] auth.uid:", user.id, "weekStartStr:", weekStartStr);
 
       const { data } = await supabase
         .from("weekly_assignments")

@@ -250,19 +250,19 @@ export default function AdminDashboard() {
       weekStart.setDate(today.getDate() - diff);
       const weekStartStr = weekStart.toISOString().split("T")[0];
 
-      // Check if assignments already exist for this week
-      const { data: existing } = await supabase
+      // Delete existing assignments for this week to allow regeneration
+      const { error: deleteErr } = await supabase
         .from("weekly_assignments")
-        .select("id")
-        .eq("week_start_date", weekStartStr)
-        .limit(1);
+        .delete()
+        .eq("week_start_date", weekStartStr);
 
-      if (existing && existing.length > 0) {
-        toast({ title: "Assignments already exist", description: "Assignments for this week have already been generated.", variant: "destructive" });
+      if (deleteErr) {
+        toast({ title: "Error clearing old assignments", description: deleteErr.message, variant: "destructive" });
         setGenerating(false);
         setConfirmGenerate(false);
         return;
       }
+      console.log("[Admin] Regenerating assignments for week:", weekStartStr);
 
       // Get approved members only (role = member)
       const { data: memberRoles } = await supabase
