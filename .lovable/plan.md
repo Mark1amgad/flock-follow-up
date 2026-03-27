@@ -1,66 +1,70 @@
 
 
-# Church Follow-Up Committee App
+# Group-Based Architecture Refactor
 
 ## Overview
-A secure web application for managing church follow-up activities, with role-based dashboards for committee members and admins, weekly random assignments, attendance tracking, and WhatsApp integration.
+Add a `groups` table and link profiles, people, and weekly_assignments to groups. Assignment generation and member views become group-scoped.
 
----
+## Database Changes (Migration)
 
-## 1. Authentication & User Management
-- Email + password sign-up/login via Supabase Auth
-- Forgot/reset password flow
-- User profiles table linked to auth (name, gender)
-- Separate `user_roles` table for secure role management (admin/member)
-- Protected routes — redirect unauthenticated users to login
+### 1. Create `groups` table
+```sql
+CREATE TABLE public.groups (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  level text NOT NULL,        -- 'primary', 'preparatory', 'secondary', etc.
+  grade text,                 -- e.g. '1st', '2nd'
+  gender text NOT NULL,       -- 'male', 'female', 'mixed'
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.groups ENABLE ROW LEVEL SECURITY;
 
-## 2. Member Dashboard
-- After login, members see **only their assigned people** for the current week
-- Each person displayed as a card showing:
-  - Full Name, Phone, Gender, Last Attendance Date
-  - **WhatsApp button** — auto-converts Egyptian phone numbers (e.g., `01012345678` → `201012345678`) and opens `https://wa.me/{formatted_phone}`
-- Clean, mobile-friendly card layout
+-- Admins full access, members can read
+CREATE POLICY "Admins can manage groups" ON public.groups FOR ALL TO authenticated
+  USING (has_role(auth.uid(), 'admin'));
+CREATE POLICY "Members can read groups" ON public.groups FOR SELECT TO authenticated
+  USING (has_role(auth.uid(), 'member'));
+```
 
-## 3. Admin Dashboard
-### People Management
-- Add, edit, and delete people (name, phone, gender)
-- Searchable list of all people
+### 2. Add `group_id` to existing tables
+```sql
+ALTER TABLE public.profiles ADD COLUMN group_id uuid REFERENCES public.groups(id);
+ALTER TABLE public.people ADD COLUMN group_id uuid REFERENCES public.groups(id);
+ALTER TABLE public.weekly_assignments ADD COLUMN group_id uuid REFERENCES public.groups(id);
+```
 
-### Attendance Tracking
-- Search for a person by name
-- "Mark as Present Today" button per person
-- Records attendance date and updates `last_attendance_date`
+## Frontend Changes
 
-### Weekly Assignment Generator
-- "Generate Weekly Assignment" button
-- Randomly assigns people to committee members with **gender matching** (males → male members, females → female members)
-- Balanced distribution across members
-- Saved with `week_start_date` — assignments stay fixed for the week
-- Prevents accidental re-generation (confirmation prompt)
+### Auth.tsx (Sign Up)
+- Add a group selector dropdown during signup (fetched from `groups` table).
+- Pass `group_id` into user metadata so `handle_new_user` trigger stores it in profiles.
 
-### Dashboard Stats
-- Total people count
-- Present this week / Absent this week
-- Filters: absent 1 week, absent 3+ weeks
+### handle_new_user trigger (Migration)
+- Update to read `group_id` from `raw_user_meta_data` and store in `profiles.group_id`.
 
-## 4. Database Schema (Supabase)
-- **profiles** — id, name, gender (linked to auth.users)
-- **user_roles** — user_id, role (admin/member) — separate table for security
-- **people** — id, name, phone, gender, last_attendance_date
-- **attendance** — id, person_id, date
-- **weekly_assignments** — id, servant_id, person_id, week_start_date
+### AdminDashboard.tsx
+- **Group management section**: CRUD for groups (name, level, grade, gender).
+- **Group selector**: Add a dropdown/tabs to filter the dashboard by group.
+- **People management**: When adding/editing a person, select a group. Filter people list by selected group.
+- **Assignment generation**: Generate per selected group only. Delete + regenerate scoped to `group_id + week_start_date`. Only match members and people within the same group.
+- **Stats**: Scoped to selected group.
+- **Pending users**: Show requested group name.
 
-## 5. Security (Row-Level Security)
-- `people` table: admin full access; members no direct access
-- `weekly_assignments`: members can only read their own assignments
-- `attendance`: admin can insert/read; members read-only for their assigned people
-- `user_roles`: secured via security-definer function to prevent recursion
-- No public database access
+### MemberDashboard.tsx
+- Fetch assignments filtered by the member's `group_id` (from their profile).
+- No manual group selection needed — auto-scoped.
 
-## 6. UI & Design
-- Modern, clean church-appropriate design with warm colors
-- Responsive layout optimized for mobile use
-- Separate admin and member views based on role
-- Card-based layout for assigned people
-- Search bars, action buttons, and stat counters on admin dashboard
+### Index.tsx
+- No changes needed (routing logic unchanged).
+
+## RLS Policy Updates
+- `people` "Members can read assigned people" policy stays as-is (already scoped via weekly_assignments join).
+- `weekly_assignments` policies stay as-is (servant_id scoping is sufficient since assignments are group-scoped at generation time).
+
+## Summary of Files Changed
+1. **New migration** — `groups` table, `group_id` columns, updated trigger
+2. **Auth.tsx** — group selector on signup
+3. **AdminDashboard.tsx** — group CRUD, group filter, scoped generation/stats
+4. **MemberDashboard.tsx** — fetch profile's group_id for scoped queries
+5. **useAuth.tsx** — include `group_id` in profile context
 
