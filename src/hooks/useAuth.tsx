@@ -9,7 +9,7 @@ interface AuthContextType {
   session: Session | null;
   user: User | null;
   role: AppRole | null;
-  profile: { name: string; gender: string; approved: boolean } | null;
+  profile: { name: string; gender: string; approved: boolean; group_id: string | null } | null;
   loading: boolean;
   signOut: () => Promise<void>;
 }
