@@ -43,10 +43,38 @@ export type Database = {
           },
         ]
       }
+      groups: {
+        Row: {
+          created_at: string
+          gender: string
+          grade: string | null
+          id: string
+          level: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          gender?: string
+          grade?: string | null
+          id?: string
+          level: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          gender?: string
+          grade?: string | null
+          id?: string
+          level?: string
+          name?: string
+        }
+        Relationships: []
+      }
       people: {
         Row: {
           created_at: string
           gender: string
+          group_id: string | null
           id: string
           last_attendance_date: string | null
           name: string
@@ -55,6 +83,7 @@ export type Database = {
         Insert: {
           created_at?: string
           gender: string
+          group_id?: string | null
           id?: string
           last_attendance_date?: string | null
           name: string
@@ -63,18 +92,28 @@ export type Database = {
         Update: {
           created_at?: string
           gender?: string
+          group_id?: string | null
           id?: string
           last_attendance_date?: string | null
           name?: string
           phone?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "people_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
           approved: boolean
           created_at: string
           gender: string
+          group_id: string | null
           id: string
           name: string
         }
@@ -82,6 +121,7 @@ export type Database = {
           approved?: boolean
           created_at?: string
           gender: string
+          group_id?: string | null
           id: string
           name: string
         }
@@ -89,10 +129,19 @@ export type Database = {
           approved?: boolean
           created_at?: string
           gender?: string
+          group_id?: string | null
           id?: string
           name?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -117,6 +166,7 @@ export type Database = {
           completed: boolean
           completed_at: string | null
           created_at: string
+          group_id: string | null
           id: string
           person_id: string
           servant_id: string
@@ -126,6 +176,7 @@ export type Database = {
           completed?: boolean
           completed_at?: string | null
           created_at?: string
+          group_id?: string | null
           id?: string
           person_id: string
           servant_id: string
@@ -135,12 +186,20 @@ export type Database = {
           completed?: boolean
           completed_at?: string | null
           created_at?: string
+          group_id?: string | null
           id?: string
           person_id?: string
           servant_id?: string
           week_start_date?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "weekly_assignments_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "weekly_assignments_person_id_fkey"
             columns: ["person_id"]
