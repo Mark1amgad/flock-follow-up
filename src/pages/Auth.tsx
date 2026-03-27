@@ -1,12 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Church } from "lucide-react";
+
+interface Group {
+  id: string;
+  name: string;
+  level: string;
+  grade: string | null;
+  gender: string;
+}
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -15,9 +24,17 @@ export default function Auth() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [gender, setGender] = useState<"male" | "female">("male");
+  const [groupId, setGroupId] = useState("");
+  const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.from("groups").select("id, name, level, grade, gender").order("level").order("name").then(({ data }) => {
+      if (data) setGroups(data);
+    });
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,12 +50,16 @@ export default function Auth() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!groupId) {
+      toast({ title: "Please select a group", variant: "destructive" });
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { name, gender },
+        data: { name, gender, group_id: groupId },
         emailRedirectTo: window.location.origin,
       },
     });
@@ -122,6 +143,21 @@ export default function Auth() {
                       Female
                     </label>
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Group</Label>
+                  <Select value={groupId} onValueChange={setGroupId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select your group" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {groups.map((g) => (
+                        <SelectItem key={g.id} value={g.id}>
+                          {g.name} ({g.level}{g.grade ? ` - ${g.grade}` : ""})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </>
             )}
